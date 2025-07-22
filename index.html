@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metro Manila EV Charger & Market Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark background */
+        }
+        .main-panel {
+            background-color: #1f2937; /* Slightly lighter card background */
+        }
+        .tab-active { 
+            color: #3b82f6; /* Bright blue accent */
+            border-color: #3b82f6;
+        }
+        .tab-inactive { 
+            border-color: transparent; 
+            color: #9ca3af; /* Muted grey for inactive text */
+        }
+        .filter-btn-active { 
+            background-color: #3b82f6; 
+            color: white;
+        }
+        .filter-btn-inactive { 
+            background-color: #374151; /* Darker grey for inactive buttons */
+            color: #d1d5db;
+        }
+        .view { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .tooltip { visibility: hidden; opacity: 0; transition: opacity 0.2s; }
+        .has-tooltip:hover .tooltip { visibility: visible; opacity: 1; }
+        
+        /* Dark mode for form elements */
+        input[type="number"], select {
+            background-color: #374151;
+            border-color: #4b5563;
+            color: #f9fafb;
+        }
+        input[type="number"]:focus, select:focus {
+            border-color: #3b82f6;
+            --tw-ring-color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-6xl mx-auto">
+        <div class="main-panel rounded-2xl shadow-2xl p-6 sm:p-8">
+            <div class="text-center mb-6">
+                <h1 class="text-3xl sm:text-4xl font-bold text-white">EV Analysis: Metro Manila</h1>
+                <p class="text-base text-gray-400 mt-2">Charger distribution, population density, and market data.</p>
+            </div>
+
+            <!-- Tabs -->
+            <div class="mb-8 flex flex-wrap justify-center border-b border-gray-700">
+                <button id="tab-curve" class="px-4 py-2 font-semibold text-sm sm:text-base border-b-2 transition-colors duration-300 tab-active">Proximity Curve</button>
+                <button id="tab-heatmap" class="px-4 py-2 font-semibold text-sm sm:text-base border-b-2 transition-colors duration-300 tab-inactive">City Heatmap</button>
+                <button id="tab-financing" class="px-4 py-2 font-semibold text-sm sm:text-base border-b-2 transition-colors duration-300 tab-inactive">Financing</button>
+                <button id="tab-evs" class="px-4 py-2 font-semibold text-sm sm:text-base border-b-2 transition-colors duration-300 tab-inactive">Top EVs</button>
+                <button id="tab-simulator" class="px-4 py-2 font-semibold text-sm sm:text-base border-b-2 transition-colors duration-300 tab-inactive">Trip Simulator</button>
+            </div>
+
+            <!-- Views Container -->
+            <div>
+                <!-- Proximity Curve View -->
+                <div id="view-curve" class="view">
+                    <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+                         <p class="text-gray-300 mb-4 sm:mb-0 text-center sm:text-left">Filter by charger type:</p>
+                        <div id="curve-filter-container" class="flex flex-wrap items-center justify-center gap-2 rounded-lg p-1 bg-gray-900/50">
+                            <button data-filter="all" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-active">All</button>
+                            <button data-filter="ac_type2" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive">AC Type 2</button>
+                            <button data-filter="dc_ccs2" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive has-tooltip relative">
+                                DC CCS2
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="inline-block ml-1 text-gray-400"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"></path></svg>
+                                <span class="tooltip absolute bottom-full mb-2 w-48 bg-black text-white text-xs rounded-md p-2 z-10">DC chargers are faster and superior for quick top-ups.</span>
+                            </button>
+                             <button data-filter="dc_chademo" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive">DC CHAdeMO</button>
+                            <button data-filter="dc_gbt" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive">DC GB/T</button>
+                            <button data-filter="bss" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive">BSS</button>
+                        </div>
+                    </div>
+                    <div class="relative h-80 md:h-96"><canvas id="evCurveChart"></canvas></div>
+                </div>
+
+                <!-- City Heatmap View -->
+                <div id="view-heatmap" class="view hidden">
+                    <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+                        <p class="text-gray-300 mb-4 sm:mb-0 text-center sm:text-left">Filter by charger type:</p>
+                        <div id="heatmap-filter-container" class="flex flex-wrap items-center justify-center gap-2 rounded-lg p-1 bg-gray-900/50">
+                             <button data-filter="all" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-active">All</button>
+                            <button data-filter="ac_type2" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive">AC Type 2</button>
+                            <button data-filter="dc_ccs2" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive">DC CCS2</button>
+                            <button data-filter="dc_chademo" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive">DC CHAdeMO</button>
+                            <button data-filter="dc_gbt" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive">DC GB/T</button>
+                            <button data-filter="bss" class="filter-btn text-sm font-medium py-1.5 px-3 rounded-md transition-all duration-200 filter-btn-inactive">BSS</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-700">
+                            <thead class="">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">City</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">Pop. Density (/km²)</th>
+                                    <th id="total-chargers-header" class="px-6 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">Total Chargers</th>
+                                </tr>
+                            </thead>
+                            <tbody id="heatmap-table-body" class="divide-y divide-gray-700/50"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Financing Calculator View -->
+                <div id="view-financing" class="view hidden">
+                    <div class="max-w-2xl mx-auto bg-gray-800 p-6 rounded-xl">
+                        <div class="space-y-6">
+                            <div>
+                                <label for="car-selector" class="block text-sm font-medium text-gray-300">Select Vehicle</label>
+                                <select id="car-selector" class="mt-1 block w-full pl-3 pr-10 py-2 text-base focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"></select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300">Vehicle Price (SRP)</label>
+                                <p id="car-srp" class="mt-1 text-2xl font-semibold text-white">₱0</p>
+                            </div>
+
+                            <div>
+                                <label for="downpayment" class="block text-sm font-medium text-gray-300">Downpayment Amount (PHP)</label>
+                                <input type="number" id="downpayment" value="200000" class="mt-1 block w-full pl-3 pr-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="loan-period" class="block text-sm font-medium text-gray-300">Loan Period</label>
+                                    <select id="loan-period" class="mt-1 block w-full pl-3 pr-10 py-2 text-base focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                        <option value="3">3 Years</option>
+                                        <option value="4">4 Years</option>
+                                        <option value="5" selected>5 Years</option>
+                                        <option value="6">6 Years</option>
+                                        <option value="7">7 Years</option>
+                                        <option value="8">8 Years</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="interest-rate" class="block text-sm font-medium text-gray-300">Annual Interest Rate</label>
+                                    <select id="interest-rate" class="mt-1 block w-full pl-3 pr-10 py-2 text-base focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"></select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-8 pt-6 border-t border-gray-600 text-center">
+                            <p class="text-sm text-gray-400">Estimated Monthly Premium</p>
+                            <p id="monthly-premium" class="text-4xl font-bold text-blue-400 mt-1">₱0.00</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top EVs View -->
+                <div id="view-evs" class="view hidden">
+                    <p class="text-center text-gray-400 mb-6">Top 30 popular electric vehicles in the Philippines (SRP as of Q3 2024, may vary).</p>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-700">
+                             <thead class="">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Vehicle</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">Battery (kWh)</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">Range (km)</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">SRP (PHP)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ev-table-body" class="divide-y divide-gray-700/50"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Trip Simulator View -->
+                <div id="view-simulator" class="view hidden">
+                    <div class="max-w-3xl mx-auto bg-gray-800 p-6 rounded-xl">
+                        <h2 class="text-2xl font-bold text-white text-center mb-2">Road Trip Simulator</h2>
+                        <p class="text-center text-gray-400 mb-6">See the farthest journey possible starting from Luneta Park.</p>
+                        <div class="flex flex-col sm:flex-row gap-4 items-center mb-6">
+                            <div class="w-full sm:w-2/3">
+                                <label for="sim-car-selector" class="block text-sm font-medium text-gray-300">Select Vehicle</label>
+                                <select id="sim-car-selector" class="mt-1 block w-full pl-3 pr-10 py-2 text-base focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"></select>
+                            </div>
+                            <div class="w-full sm:w-1/3">
+                                <label class="block text-sm font-medium text-gray-300 opacity-0 sm:opacity-100">_</label>
+                                <button id="start-simulation-btn" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition-colors duration-200">Start Simulation</button>
+                            </div>
+                        </div>
+
+                        <div id="simulation-results" class="mt-6 space-y-3">
+                            <!-- Simulation results will be appended here -->
+                        </div>
+                         <p class="text-xs text-gray-500 mt-4 text-center">Note: Distances are estimated using a variable road factor based on linear distance and do not account for real-time traffic or specific routes.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Data Sources Footer -->
+            <div class="mt-8 pt-4 border-t border-gray-700 text-center">
+                <p class="text-xs text-gray-500">
+                    <strong>Data Sources:</strong> EVCS locations from <a href="https://evindustry.ph/evcs-locations/" target="_blank" class="text-blue-400 hover:underline">DOE</a>. Population data from <a href="https://psa.gov.ph/" target="_blank" class="text-blue-400 hover:underline">PSA</a>. EV market data from industry reports.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DATA ---
+            const cityData = [
+                { city: "Manila", population: 1846513, area: 42.88, ac_type2: 2, dc_ccs2: 0, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Mandaluyong", population: 425758, area: 11.06, ac_type2: 10, dc_ccs2: 1, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Pasay", population: 440656, area: 13.97, ac_type2: 8, dc_ccs2: 2, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Makati", population: 629616, area: 21.57, ac_type2: 22, dc_ccs2: 8, dc_chademo: 3, dc_gbt: 0, bss: 2 },
+                { city: "Quezon City", population: 2960048, area: 171.71, ac_type2: 35, dc_ccs2: 5, dc_chademo: 1, dc_gbt: 2, bss: 3 },
+                { city: "Pasig", population: 803159, area: 48.46, ac_type2: 15, dc_ccs2: 4, dc_chademo: 1, dc_gbt: 0, bss: 1 },
+                { city: "Parañaque", population: 689992, area: 46.57, ac_type2: 9, dc_ccs2: 2, dc_chademo: 1, dc_gbt: 0, bss: 1 },
+                { city: "Taguig", population: 886722, area: 45.21, ac_type2: 25, dc_ccs2: 4, dc_chademo: 2, dc_gbt: 0, bss: 2 },
+                { city: "Las Piñas", population: 606293, area: 32.69, ac_type2: 5, dc_ccs2: 1, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Muntinlupa", population: 543445, area: 39.75, ac_type2: 6, dc_ccs2: 1, dc_chademo: 1, dc_gbt: 0, bss: 1 },
+                { city: "San Juan", population: 126347, area: 5.95, ac_type2: 3, dc_ccs2: 1, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Marikina", population: 456059, area: 21.52, ac_type2: 1, dc_ccs2: 0, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Valenzuela", population: 714978, area: 47.02, ac_type2: 1, dc_ccs2: 0, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Caloocan", population: 1661584, area: 55.80, ac_type2: 2, dc_ccs2: 0, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Navotas", population: 247543, area: 11.51, ac_type2: 0, dc_ccs2: 0, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Malabon", population: 380522, area: 15.96, ac_type2: 0, dc_ccs2: 0, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+                { city: "Pateros", population: 65227, area: 1.76, ac_type2: 0, dc_ccs2: 0, dc_chademo: 0, dc_gbt: 0, bss: 0 },
+            ].map(c => ({...c, density: Math.round(c.population / c.area) }));
+            const evData = [
+                { name: "Wuling Mini EV", type: "City Car", battery: 13.8, range: 170, price: 670000 },
+                { name: "Jetour Ice Cream EV", type: "City Car", battery: 13.9, range: 170, price: 699000 },
+                { name: "Wuling Binguo EV", type: "Hatchback", battery: 31.9, range: 333, price: 1200000 },
+                { name: "Nissan Kicks e-Power", type: "Crossover (Hybrid)", battery: 2.1, range: 900, price: 1239000 },
+                { name: "GWM Ora 03", type: "Hatchback", battery: 48, range: 400, price: 1288000 },
+                { name: "BYD Dolphin", type: "Hatchback", battery: 44.9, range: 405, price: 1398000 },
+                { name: "Seres 3", type: "Crossover", battery: 52.7, range: 329, price: 1795000 },
+                { name: "BYD Atto 3", type: "Crossover", battery: 60.5, range: 480, price: 1798000 },
+                { name: "Changan Eado EV460", type: "Sedan", battery: 52.5, range: 460, price: 1828000 },
+                { name: "MG ZS EV", type: "Crossover", battery: 51, range: 320, price: 1838888 },
+                { name: "MG4 EV", type: "Hatchback", battery: 64, range: 435, price: 1898888 },
+                { name: "Weltmeister W5", type: "Crossover", battery: 52, range: 403, price: 2548000 },
+                { name: "Nissan Leaf", type: "Hatchback", battery: 40, range: 270, price: 2798000 },
+                { name: "Hyundai Ioniq 5", type: "Crossover", battery: 72.6, range: 481, price: 3088000 },
+                { name: "Tesla Model 3", type: "Sedan", battery: 60, range: 513, price: 3100000 },
+                { name: "BYD Han", type: "Sedan", battery: 85.4, range: 605, price: 3688000 },
+                { name: "Kia EV6", type: "Crossover", battery: 77.4, range: 528, price: 3788000 },
+                { name: "Hyundai Ioniq 6", type: "Sedan", battery: 77.4, range: 614, price: 3798000 },
+                { name: "Tesla Model Y", type: "Crossover", battery: 75, range: 533, price: 3800000 },
+                { name: "Volvo C40 Recharge", type: "Crossover", battery: 78, range: 450, price: 4190000 },
+                { name: "BMW iX3", type: "SUV", battery: 80, range: 460, price: 4990000 },
+                { name: "Mercedes-Benz EQA 250", type: "Crossover", battery: 66.5, range: 496, price: 3990000 },
+                { name: "BMW i4", type: "Sedan", battery: 83.9, range: 590, price: 4790000 },
+                { name: "BMW iX", type: "SUV", battery: 111.5, range: 630, price: 6290000 },
+                { name: "Jaguar I-Pace", type: "SUV", battery: 90, range: 470, price: 7590000 },
+                { name: "Audi Q8 e-tron", type: "SUV", battery: 114, range: 600, price: 7990000 },
+                { name: "Porsche Taycan", type: "Sedan", battery: 93.4, range: 463, price: 9000000 },
+                { name: "Audi e-tron GT", type: "Sedan", battery: 93.4, range: 488, price: 10850000 },
+                { name: "Porsche Macan EV", type: "SUV", battery: 100, range: 613, price: 6800000 },
+                { name: "Lotus Eletre", type: "SUV", battery: 112, range: 600, price: 9900000 },
+            ].sort((a,b) => a.price - b.price);
+            const proximityData = {
+                all: [0, 40, 25, 15, 10, 5, 3, 2, 1],
+                ac_type2: [0, 38, 24, 16, 12, 6, 4, 2, 1],
+                dc_ccs2: [0, 15, 20, 25, 15, 10, 8, 5, 2],
+                dc_chademo: [0, 5, 8, 12, 18, 20, 15, 12, 10],
+                dc_gbt: [0, 2, 5, 10, 15, 25, 20, 15, 8],
+                bss: [0, 5, 10, 15, 20, 15, 10, 5, 5]
+            };
+            const chargerData = [
+                { name: "SM Center Tuguegarao", lat: 17.61321, lon: 121.72369 },
+                { name: "Citadines Roces QC", lat: 14.62929, lon: 121.03062 },
+                { name: "SM Center Shaw", lat: 14.58747, lon: 121.04583 },
+                { name: "Quest Plus Clark", lat: 15.18339, lon: 120.52369 },
+                { name: "SM Center Las Piñas", lat: 14.44918, lon: 120.98067 },
+                { name: "SM Megamall", lat: 14.58361, lon: 121.05646 },
+                { name: "Ayala Malls Centrio", lat: 8.48138, lon: 124.64416 },
+                { name: "SM City Sucat", lat: 14.48392, lon: 120.99402 },
+                { name: "Forbes Town", lat: 14.55138, lon: 121.04477 },
+                { name: "Phoenix Fuels Life", lat: 14.56676, lon: 121.01210 },
+                { name: "Six/Neo BGC", lat: 14.54775, lon: 121.05065 },
+                { name: "Okada Manila", lat: 14.51460, lon: 120.98005 },
+                { name: "RBC Ortigas", lat: 14.58996, lon: 121.06861 },
+                { name: "Quest Hotel Tagaytay", lat: 14.11591, lon: 120.95959 },
+                { name: "Kasa Luntian", lat: 14.11591, lon: 120.95959 }
+            ];
+
+            // --- UTILS ---
+            const getColor = (value, max) => {
+                if (value === 0) return 'bg-gray-700/50 text-gray-400';
+                const percentage = Math.min(value / max, 1);
+                if (percentage < 0.01) return 'bg-blue-900/50 text-blue-300';
+                if (percentage < 0.1) return 'bg-yellow-900/50 text-yellow-300';
+                if (percentage < 0.3) return 'bg-orange-900/50 text-orange-300';
+                return 'bg-red-900/50 text-red-300';
+            };
+            
+            // --- TABS LOGIC ---
+            const tabs = [
+                { id: 'curve', btn: document.getElementById('tab-curve'), view: document.getElementById('view-curve') },
+                { id: 'heatmap', btn: document.getElementById('tab-heatmap'), view: document.getElementById('view-heatmap') },
+                { id: 'financing', btn: document.getElementById('tab-financing'), view: document.getElementById('view-financing') },
+                { id: 'evs', btn: document.getElementById('tab-evs'), view: document.getElementById('view-evs') },
+                { id: 'simulator', btn: document.getElementById('tab-simulator'), view: document.getElementById('view-simulator') }
+            ];
+            tabs.forEach(tab => {
+                tab.btn.addEventListener('click', () => {
+                    tabs.forEach(t => {
+                        t.btn.classList.replace('tab-active', 'tab-inactive');
+                        t.view.classList.add('hidden');
+                    });
+                    tab.btn.classList.replace('tab-inactive', 'tab-active');
+                    tab.view.classList.remove('hidden');
+                });
+            });
+            
+            // --- FINANCING CALCULATOR LOGIC ---
+            const carSelector = document.getElementById('car-selector');
+            const carSrpEl = document.getElementById('car-srp');
+            const downpaymentEl = document.getElementById('downpayment');
+            const loanPeriodEl = document.getElementById('loan-period');
+            const interestRateEl = document.getElementById('interest-rate');
+            const monthlyPremiumEl = document.getElementById('monthly-premium');
+
+            const calculateMonthlyPremium = () => {
+                const selectedCar = evData.find(ev => ev.name === carSelector.value);
+                if (!selectedCar) return;
+
+                const srp = selectedCar.price;
+                const downpayment = parseFloat(downpaymentEl.value) || 0;
+                const loanPeriodYears = parseInt(loanPeriodEl.value);
+                const annualInterestRate = parseFloat(interestRateEl.value);
+
+                const principal = srp - downpayment;
+                if (principal <= 0) {
+                    monthlyPremiumEl.textContent = '₱0.00';
+                    return;
+                }
+
+                const monthlyInterestRate = annualInterestRate / 12;
+                const numberOfPayments = loanPeriodYears * 12;
+
+                const numerator = monthlyInterestRate * Math.pow(1 + monthlyInterestRate, numberOfPayments);
+                const denominator = Math.pow(1 + monthlyInterestRate, numberOfPayments) - 1;
+                const monthlyPayment = principal * (numerator / denominator);
+
+                monthlyPremiumEl.textContent = `₱${monthlyPayment.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            };
+
+            const validateAndRecalculate = () => {
+                const selectedCar = evData.find(ev => ev.name === carSelector.value);
+                if (!selectedCar) return;
+
+                const maxDownpayment = selectedCar.price * 0.70;
+                if (parseFloat(downpaymentEl.value) > maxDownpayment) {
+                    downpaymentEl.value = Math.floor(maxDownpayment);
+                }
+                calculateMonthlyPremium();
+            };
+            
+            const setupInterestRateSelector = () => {
+                for (let i = 4.00; i <= 9.00; i += 0.25) {
+                    const option = document.createElement('option');
+                    const value = i / 100;
+                    option.value = value;
+                    option.textContent = `${i.toFixed(2)}%`;
+                    if (i === 6.5) {
+                        option.selected = true;
+                    }
+                    interestRateEl.appendChild(option);
+                }
+            };
+
+            const setupFinancingCalculator = () => {
+                evData.forEach(ev => {
+                    const option = document.createElement('option');
+                    option.value = ev.name;
+                    option.textContent = ev.name;
+                    carSelector.appendChild(option);
+                });
+
+                const updateSrpAndValidate = () => {
+                    const selectedCar = evData.find(ev => ev.name === carSelector.value);
+                    if (selectedCar) {
+                        carSrpEl.textContent = `₱${selectedCar.price.toLocaleString()}`;
+                    }
+                    validateAndRecalculate();
+                };
+
+                carSelector.addEventListener('change', updateSrpAndValidate);
+                downpaymentEl.addEventListener('input', validateAndRecalculate);
+                loanPeriodEl.addEventListener('change', calculateMonthlyPremium);
+                interestRateEl.addEventListener('change', calculateMonthlyPremium);
+                
+                setupInterestRateSelector();
+                updateSrpAndValidate();
+            };
+
+            // --- TOP EVS TABLE RENDER ---
+            const evTableBody = document.getElementById('ev-table-body');
+            evData.forEach(ev => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-800 transition-colors duration-200';
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-white">${ev.name}</div></td>
+                    <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm text-gray-400">${ev.type}</div></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center"><span class="text-sm text-gray-300">${ev.battery}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center"><span class="text-sm text-gray-300">${ev.range}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right"><span class="text-sm font-semibold text-white">₱${ev.price.toLocaleString()}</span></td>
+                `;
+                evTableBody.appendChild(row);
+            });
+
+            // --- HEATMAP TABLE & FILTER LOGIC ---
+            const heatmapTableBody = document.getElementById('heatmap-table-body');
+            const heatmapFilterContainer = document.getElementById('heatmap-filter-container');
+            const totalChargersHeader = document.getElementById('total-chargers-header');
+            let heatmapCurrentFilter = 'all';
+
+            const renderHeatmapTable = () => {
+                heatmapTableBody.innerHTML = ''; 
+                const filteredData = cityData.map(c => {
+                    let count = 0;
+                    if (heatmapCurrentFilter === 'all') {
+                        count = c.ac_type2 + c.dc_ccs2 + c.dc_chademo + c.dc_gbt + c.bss;
+                    } else {
+                        count = c[heatmapCurrentFilter] || 0;
+                    }
+                    return { ...c, count };
+                }).sort((a, b) => b.count - a.count);
+
+                const maxDensity = Math.max(...filteredData.map(c => c.density));
+                const maxChargers = Math.max(...filteredData.map(c => c.count)) || 1;
+                
+                let headerText = 'Total Chargers';
+                if(heatmapCurrentFilter !== 'all') {
+                    headerText = heatmapCurrentFilter.replace('_', ' ').toUpperCase() + ' Chargers';
+                }
+                totalChargersHeader.textContent = headerText;
+
+                filteredData.forEach(data => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-800 transition-colors duration-200';
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-white">${data.city}</div></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getColor(data.density, maxDensity)}">${data.density.toLocaleString()}</span></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getColor(data.count, maxChargers)}">${data.count}</span></td>
+                    `;
+                    heatmapTableBody.appendChild(row);
+                });
+            };
+            
+            heatmapFilterContainer.addEventListener('click', (e) => {
+                const button = e.target.closest('button');
+                if (button) {
+                    heatmapCurrentFilter = button.dataset.filter;
+                    heatmapFilterContainer.querySelectorAll('button').forEach(btn => btn.classList.replace('filter-btn-active', 'filter-btn-inactive'));
+                    button.classList.replace('filter-btn-inactive', 'filter-btn-active');
+                    renderHeatmapTable();
+                }
+            });
+
+            // --- PROXIMITY CURVE CHART LOGIC ---
+            const ctx = document.getElementById('evCurveChart').getContext('2d');
+            const curveFilterContainer = document.getElementById('curve-filter-container');
+            
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8+'],
+                    datasets: [{
+                        label: '% of Population',
+                        data: proximityData.all,
+                        borderColor: '#3b82f6',
+                        backgroundColor: (context) => {
+                             const chart = context.chart; const {ctx, chartArea} = chart;
+                             if (!chartArea) return null;
+                             const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+                             gradient.addColorStop(0, 'rgba(59, 130, 246, 0)');
+                             gradient.addColorStop(1, 'rgba(59, 130, 246, 0.4)');
+                             return gradient;
+                        },
+                        borderWidth: 3, fill: true, tension: 0.4, pointRadius: 2, pointBackgroundColor: '#3b82f6',
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { 
+                            enabled: true, 
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 12 },
+                            padding: 12, cornerRadius: 8,
+                            callbacks: { title: (c) => `~${c[0].label} km`, label: (c) => `${c.raw}% of population` }
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            title: { display: true, text: '% of Population', font: { size: 12, weight: '500' }, color: '#9ca3af' }, 
+                            grid: { drawBorder: false, color: 'rgba(255, 255, 255, 0.1)' }, 
+                            ticks: { 
+                                stepSize: 10,
+                                color: '#9ca3af',
+                                callback: (v) => v + '%'
+                            }
+                        },
+                        x: { 
+                            title: { display: true, text: 'Distance to Nearest EV Charger (km)', font: { size: 12, weight: '500' }, color: '#9ca3af' }, 
+                            grid: { display: false }, 
+                            ticks: { color: '#9ca3af' }
+                        }
+                    }
+                }
+            });
+
+            curveFilterContainer.addEventListener('click', (e) => {
+                const button = e.target.closest('button');
+                if (button) {
+                    const filter = button.dataset.filter;
+                    chart.data.datasets[0].data = proximityData[filter];
+                    chart.update();
+                    curveFilterContainer.querySelectorAll('button').forEach(btn => btn.classList.replace('filter-btn-active', 'filter-btn-inactive'));
+                    button.classList.replace('filter-btn-inactive', 'filter-btn-active');
+                }
+            });
+
+            // --- TRIP SIMULATOR LOGIC ---
+            const simCarSelector = document.getElementById('sim-car-selector');
+            const startSimBtn = document.getElementById('start-simulation-btn');
+            const simResultsEl = document.getElementById('simulation-results');
+
+            function getEstimatedRoadDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371; // Radius of the Earth in km
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                const linearDistance = R * c;
+
+                let factor;
+                if (linearDistance >= 300) {
+                    factor = 1.45;
+                } else if (linearDistance < 50) {
+                    factor = 1.25;
+                } else {
+                    factor = 1.32;
+                }
+                return linearDistance * factor;
+            }
+
+            const runSimulation = () => {
+                simResultsEl.innerHTML = '';
+                const selectedCar = evData.find(ev => ev.name === simCarSelector.value);
+                if (!selectedCar) return;
+
+                let remainingChargers = [...chargerData];
+                let currentLocation = { name: "Luneta Park", lat: 14.5829, lon: 120.9796 };
+                let totalDistance = 0;
+                let leg = 1;
+
+                while (true) {
+                    const carRange = selectedCar.range;
+                    
+                    let reachableChargers = remainingChargers.map(charger => ({
+                        ...charger,
+                        distance: getEstimatedRoadDistance(currentLocation.lat, currentLocation.lon, charger.lat, charger.lon)
+                    })).filter(charger => charger.distance <= carRange);
+
+                    if (reachableChargers.length === 0) {
+                        const endMessage = document.createElement('div');
+                        endMessage.className = 'text-center text-yellow-400 p-3 bg-yellow-900/50 rounded-lg';
+                        endMessage.innerHTML = `<p class="font-semibold">End of Trip</p><p class="text-sm">No more chargers reachable within ${carRange}km range. Total estimated distance covered: ${totalDistance.toFixed(2)} km.</p>`;
+                        simResultsEl.appendChild(endMessage);
+                        break;
+                    }
+
+                    reachableChargers.sort((a, b) => b.distance - a.distance);
+                    const nextStop = reachableChargers[0];
+                    
+                    const legResult = document.createElement('div');
+                    legResult.className = 'p-3 bg-gray-700/50 rounded-lg text-sm';
+                    legResult.innerHTML = `<span class="font-bold text-blue-400">Leg ${leg}:</span> Travel from <span class="font-semibold text-white">${currentLocation.name}</span> to <span class="font-semibold text-white">${nextStop.name}</span>. <span class="text-gray-400">(Est. ${nextStop.distance.toFixed(2)} km)</span>`;
+                    simResultsEl.appendChild(legResult);
+
+                    totalDistance += nextStop.distance;
+                    currentLocation = nextStop;
+                    remainingChargers = remainingChargers.filter(c => c.name !== nextStop.name);
+                    leg++;
+                }
+            };
+
+            const setupSimulator = () => {
+                evData.forEach(ev => {
+                    const option = document.createElement('option');
+                    option.value = ev.name;
+                    option.textContent = `${ev.name} (${ev.range} km range)`;
+                    simCarSelector.appendChild(option);
+                });
+                startSimBtn.addEventListener('click', runSimulation);
+            };
+
+            // Initial renders
+            renderHeatmapTable();
+            setupFinancingCalculator();
+            setupSimulator();
+        });
+    </script>
+</body>
+</html>
